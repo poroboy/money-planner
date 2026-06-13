@@ -9,19 +9,28 @@ export const thb = (value: number) =>
 
 const monthNames = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 
+function formatMonthKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+}
+
 export function getMonthKey(date = new Date()) {
-  return date.toISOString().slice(0, 7);
+  return formatMonthKey(date);
 }
 
 export function addMonths(monthKey: string, monthsToAdd: number) {
   const [year, month] = monthKey.split('-').map(Number);
-  const date = new Date(year, month - 1 + monthsToAdd, 1);
-  return date.toISOString().slice(0, 7);
+  const date = new Date(year, month - 1 + monthsToAdd, 1, 12, 0, 0);
+  return formatMonthKey(date);
 }
 
 export function monthDiff(startMonth: string, targetMonth: string) {
   const [sy, sm] = startMonth.split('-').map(Number);
   const [ty, tm] = targetMonth.split('-').map(Number);
+
+  if (!sy || !sm || !ty || !tm) return 0;
+
   return (ty - sy) * 12 + (tm - sm);
 }
 
@@ -42,6 +51,31 @@ export function activeInstallments(installments: Installment[]) {
   return installments.filter((item) => item.status === 'active' && Number(item.remainingMonths) > 0);
 }
 
+function getPayableStartMonth(item: Installment, forecastStartMonth: string) {
+  const itemStartMonth = item.startMonth || forecastStartMonth;
+
+  // ถ้ารายการเริ่มในอนาคต ให้เริ่มจ่ายตาม startMonth จริง
+  if (monthDiff(forecastStartMonth, itemStartMonth) > 0) {
+    return itemStartMonth;
+  }
+
+  // ถ้ารายการเริ่มไปแล้ว และยังมี remainingMonths ให้ถือว่าเดือนนี้ยังเป็นภาระที่ต้องจ่าย
+  return forecastStartMonth;
+}
+
+function isInstallmentPayableInMonth(item: Installment, targetMonth: string, forecastStartMonth: string) {
+  const remainingMonths = Number(item.remainingMonths || 0);
+
+  if (item.status !== 'active' || remainingMonths <= 0) {
+    return false;
+  }
+
+  const payableStartMonth = getPayableStartMonth(item, forecastStartMonth);
+  const elapsedFromPayableStart = monthDiff(payableStartMonth, targetMonth);
+
+  return elapsedFromPayableStart >= 0 && elapsedFromPayableStart < remainingMonths;
+}
+
 export function installmentTotalThisMonth(installments: Installment[], monthKey = getMonthKey()) {
   return buildForecast(installments, monthKey, 1)[0]?.total || 0;
 }
@@ -51,11 +85,9 @@ export function buildForecast(installments: Installment[], startMonth = getMonth
 
   return Array.from({ length: months }, (_, index) => {
     const monthKey = addMonths(startMonth, index);
+
     const lines = active
-      .filter((item) => {
-        const elapsed = monthDiff(item.startMonth, monthKey);
-        return elapsed >= Number(item.paidMonths || 0) && elapsed < Number(item.totalMonths || 0);
-      })
+      .filter((item) => isInstallmentPayableInMonth(item, monthKey, startMonth))
       .map((item) => ({
         installmentId: item.id,
         title: item.title,
@@ -87,6 +119,7 @@ export function summaryBySource(installments: Installment[], sources: PaymentSou
 
   return sources.map((source) => {
     const itemCount = active.filter((item) => item.sourceId === source.id).length;
+
     return {
       sourceId: source.id,
       name: source.name,
@@ -102,5 +135,6 @@ export function topExpenseCategory(expenses: Expense[]) {
     acc[item.category] = (acc[item.category] || 0) + Number(item.amount || 0);
     return acc;
   }, {});
+
   return Object.entries(byCategory).sort((a, b) => b[1] - a[1])[0] || ['-', 0];
 }
