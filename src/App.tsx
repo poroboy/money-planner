@@ -8,6 +8,7 @@ import {
   addInstallment,
   addPaymentSource,
   removeDocument,
+  resetAllUserData,
   seedDemoData,
   updateExpenseStatus,
   updateInstallmentPaidThisMonth,
@@ -183,6 +184,11 @@ function App() {
             onSeed={async () => {
               await seedDemoData(user.uid);
               showToast('เพิ่มข้อมูลตัวอย่างเรียบร้อย');
+            }}
+            onReset={async () => {
+              await resetAllUserData(user.uid);
+              showToast('รีเซ็ตรายการทั้งหมดเรียบร้อย');
+              setActiveTab('dashboard');
             }}
             onLogout={logout}
           />
@@ -625,8 +631,52 @@ function CalendarPage({ expenses, forecast }: { expenses: Expense[]; forecast?: 
   );
 }
 
-function SettingsPage({ userName, userEmail, onSeed, onLogout }: { userName: string; userEmail: string; onSeed: () => Promise<void>; onLogout: () => void }) {
+function SettingsPage({
+  userName,
+  userEmail,
+  onSeed,
+  onReset,
+  onLogout,
+}: {
+  userName: string;
+  userEmail: string;
+  onSeed: () => Promise<void>;
+  onReset: () => Promise<void>;
+  onLogout: () => void;
+}) {
   const [seeding, setSeeding] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  const handleSeed = async () => {
+    const confirmed = window.confirm(
+      'ต้องการเพิ่มข้อมูลตัวอย่างใช่ไหม?\n\nระบบจะเพิ่มเงินเดือน รายจ่าย แหล่งจ่าย และรายการผ่อนตัวอย่างเข้าไปในบัญชีของคุณ ข้อมูลเดิมจะยังไม่ถูกลบ'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setSeeding(true);
+      await onSeed();
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  const handleReset = async () => {
+    const confirmed = window.confirm(
+      'ยืนยันรีเซ็ตรายการทั้งหมด?\n\nระบบจะลบรายรับ รายจ่าย แหล่งจ่าย และรายการผ่อนทั้งหมดของบัญชีนี้ การทำรายการนี้ไม่สามารถย้อนกลับได้'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setResetting(true);
+      await onReset();
+    } finally {
+      setResetting(false);
+    }
+  };
+
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <div className="rounded-[2rem] bg-white p-6 shadow-soft">
@@ -635,19 +685,30 @@ function SettingsPage({ userName, userEmail, onSeed, onLogout }: { userName: str
         <p className="text-sm text-slate-500">{userEmail}</p>
         <button className="mt-6 rounded-2xl bg-navy px-5 py-3 font-bold text-white" onClick={onLogout}>Logout</button>
       </div>
+
       <div className="rounded-[2rem] bg-white p-6 shadow-soft">
         <h2 className="text-xl font-bold text-navy">Demo Data</h2>
         <p className="mt-2 text-sm text-slate-500">เพิ่มข้อมูลตัวอย่าง เช่น เงินเดือน ค่าเช่า Shopee Credit Card PayLater เพื่อทดสอบระบบ</p>
         <button
           className="mt-6 rounded-2xl bg-mint px-5 py-3 font-bold text-navy disabled:opacity-60"
-          disabled={seeding}
-          onClick={async () => {
-            setSeeding(true);
-            await onSeed();
-            setSeeding(false);
-          }}
+          disabled={seeding || resetting}
+          onClick={handleSeed}
         >
           {seeding ? 'กำลังเพิ่ม...' : 'เพิ่มข้อมูลตัวอย่าง'}
+        </button>
+      </div>
+
+      <div className="rounded-[2rem] border border-red-100 bg-white p-6 shadow-soft md:col-span-2">
+        <h2 className="text-xl font-bold text-red-600">Reset Data</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-500">
+          ใช้ปุ่มนี้เมื่ออยากล้างข้อมูลทั้งหมดในบัญชีนี้ แล้วเริ่มกรอกใหม่ตั้งแต่ต้น ข้อมูลที่ถูกลบจะรวมทั้งรายรับ รายจ่าย แหล่งจ่าย และรายการผ่อนทั้งหมด
+        </p>
+        <button
+          className="mt-6 rounded-2xl bg-red-50 px-5 py-3 font-bold text-red-600 transition hover:bg-red-100 disabled:opacity-60"
+          disabled={seeding || resetting}
+          onClick={handleReset}
+        >
+          {resetting ? 'กำลังรีเซ็ต...' : 'รีเซ็ตรายการทั้งหมด'}
         </button>
       </div>
     </div>

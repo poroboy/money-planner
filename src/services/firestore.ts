@@ -3,6 +3,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -84,6 +85,23 @@ export async function updateExpenseStatus(userId: string, item: Expense, status:
 
 export async function removeDocument(userId: string, collectionName: string, id: string) {
   return deleteDoc(doc(db, 'users', userId, collectionName, id));
+}
+
+export async function resetAllUserData(userId: string) {
+  const batch = writeBatch(db);
+  const collectionNames = ['income', 'expenses', 'paymentSources', 'installments'];
+
+  const snapshots = await Promise.all(
+    collectionNames.map((collectionName) => getDocs(userCollection(userId, collectionName)))
+  );
+
+  snapshots.forEach((snapshot) => {
+    snapshot.docs.forEach((documentSnapshot) => {
+      batch.delete(documentSnapshot.ref);
+    });
+  });
+
+  return batch.commit();
 }
 
 export async function seedDemoData(userId: string) {
