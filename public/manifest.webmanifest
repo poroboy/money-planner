@@ -1,0 +1,10 @@
+{
+  "name": "Money Planner",
+  "short_name": "Money Planner",
+  "description": "แอปรายรับรายจ่ายและภาระผ่อนรายเดือน",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f7fb",
+  "theme_color": "#10233f",
+  "icons": []
+}
